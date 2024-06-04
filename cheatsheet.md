@@ -1,4 +1,20 @@
 Here’s a step-by-step guide to help you get started with Django in a structured way:
+Sure! Here’s a table of contents added to the guide:
+
+---
+
+### Learning Django with Python
+
+#### Table of Contents
+1. [Set Up Your Environment](#step-1-set-up-your-environment)
+2. [Understand the Basics of Django](#step-2-understand-the-basics-of-django)
+3. [Create a Django Project and App](#step-3-create-a-django-project-and-app)
+4. [Define Models](#step-4-define-models)
+5. [Set Up Views and URLs](#step-5-set-up-views-and-urls)
+6. [Templates](#step-6-templates)
+7. [Static Files](#step-7-static-files)
+8. [Admin Interface](#step-8-admin-interface)
+---
 
 ### Step 1: Set Up Your Environment
 1. **Install Python**: Ensure you have Python installed. You can download it from [python.org](https://www.python.org/downloads/).
