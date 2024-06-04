@@ -1,5 +1,14 @@
 In Django, models are a key part of the framework's Object-Relational Mapping (ORM) system. A model is a Python class that represents a database table, and each attribute of the class represents a field in that table. This allows you to interact with your database using Python code rather than writing SQL queries directly.
 
+#### Table of Contents
+1. [Key Concepts of Django Models](#Key Concepts of Django Models)
+2. [Example of a Django Model](#step-2-understand-the-basics-of-django)
+3. [Common Field Types](#step-3-create-a-django-project-and-app)
+4. [Define Models](#step-4-define-models)
+5. [Using Meta Options](#step-5-set-up-views-and-urls)
+6. [Creating Multiple Models](#step-6-templates)
+---
+
 ### Key Concepts of Django Models
 
 1. **Defining a Model**: A model is defined as a Python class that subclasses `django.db.models.Model`. Each attribute of the class represents a database field.
