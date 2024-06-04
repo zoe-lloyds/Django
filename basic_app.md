@@ -1,5 +1,3 @@
-Creating a basic Django app can seem complex at first, but breaking it down into small, manageable steps can help clarify the process. Let's walk through creating a simple Django app step-by-step.
-
 ### Step-by-Step Guide to Creating a Basic Django App
 
 #### 1. **Set Up Your Environment**
@@ -148,5 +146,3 @@ To render HTML templates instead of simple text, you need to set up templates.
 - **Define models, views, and URLs** within your app.
 - **Create templates** and use the `render` function to serve HTML content.
 - **Run the development server** to see your app in action.
-
-Each of these steps builds on the previous one, gradually expanding your Django project from a simple "Hello, Django!" message to a more complex web application. As you get more comfortable, you can explore more advanced features and concepts in Django.
