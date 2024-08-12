@@ -72,3 +72,112 @@ except Exception as e:
 - The `callback_addr` is constructed using the `cluster_ip` of the identified service, which can then be used within your Django application to interact with the service.
 
 This approach gives you flexibility depending on your Kubernetes and Helm setup, allowing you to either predict the service name or dynamically search for it.
+
+
+
+To derive the Kubernetes Service name from a Helm chart programmatically, you need to understand how the Helm chart templates define the naming convention for services. Here’s how you can achieve this step by step:
+
+### 1. **Identify the Helm Chart Structure and Naming Conventions**
+
+When you deploy a Helm chart, it typically uses templating to generate the names of Kubernetes resources. The name of a Service is usually defined in the `service.yaml` file within the `templates` directory of the Helm chart.
+
+### 2. **Examine the `service.yaml` File**
+
+Open the `service.yaml` file inside the Helm chart's `templates` directory. This file defines how the Service resource is created, including its name. Here’s a typical example:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mychart.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "mychart.name" . }}
+    helm.sh/chart: {{ include "mychart.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 80
+  selector:
+    app.kubernetes.io/name: {{ include "mychart.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+```
+
+### 3. **Understand the Name Template**
+
+In the example above, the Service name is defined using `{{ include "mychart.fullname" . }}`. This template usually references a helper function defined in `_helpers.tpl` within the `templates` directory.
+
+### 4. **Check the `_helpers.tpl` File**
+
+Open the `_helpers.tpl` file to see how `fullname` is constructed. Here's an example:
+
+```yaml
+{{- define "mychart.fullname" -}}
+{{- printf "%s-%s" .Release.Name .Chart.Name | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+```
+
+This helper function constructs the service name by concatenating the Helm release name (`.Release.Name`) and the chart name (`.Chart.Name`), truncating it to 63 characters if necessary.
+
+### 5. **Programmatically Derive the Service Name**
+
+Now that you understand how the name is constructed, you can derive the service name in your code. Here’s how you can do it in Python:
+
+```python
+import os
+
+def derive_service_name(release_name, chart_name):
+    """
+    Derive the Kubernetes Service name based on Helm release and chart name.
+    
+    :param release_name: The Helm release name.
+    :param chart_name: The name of the Helm chart.
+    :return: The derived service name.
+    """
+    # This follows the logic from the _helpers.tpl
+    service_name = f"{release_name}-{chart_name}"
+
+    # Truncate to 63 characters if necessary (K8s resource name limit)
+    service_name = service_name[:63].rstrip("-")
+    
+    return service_name
+
+# Example usage:
+release_name = os.getenv("HELM_RELEASE_NAME", "myrelease")  # or fetch from your environment
+chart_name = "mychart"  # replace with your actual chart name
+
+service_name = derive_service_name(release_name, chart_name)
+print(f"The derived service name is: {service_name}")
+```
+
+### 6. **Fetch and Use the Service in Django**
+
+With the service name derived, you can now use it in your Django application to interact with the Kubernetes API:
+
+```python
+from kubernetes import client, config
+
+def get_service_ip(service_name, namespace='default'):
+    # Load in-cluster configuration
+    config.load_incluster_config()
+    core_v1 = client.CoreV1Api()
+    
+    # Fetch the service
+    service = core_v1.read_namespaced_service(name=service_name, namespace=namespace)
+    return service.spec.cluster_ip
+
+# Use the derived service name
+service_ip = get_service_ip(service_name)
+callback_addr = f'http://{service_ip}:8000/aarp_ingestion_module_test'
+print(f"Callback address: {callback_addr}")
+```
+
+### Summary
+
+- **Understand the Helm chart's templating** by examining `service.yaml` and `_helpers.tpl`.
+- **Programmatically derive the service name** by mimicking the logic in `_helpers.tpl`.
+- **Use the derived service name** in your Django application to interact with the Kubernetes Service.
+
+This approach ensures that your application can dynamically determine the service name based on the Helm deployment, which is crucial for environments where service names may change based on Helm release or chart versions.
