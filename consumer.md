@@ -103,3 +103,20 @@ Here's a basic example of how you'd set up a simple WebSocket consumer using Dja
    ```
 
 With this setup, your Django app can now handle WebSocket connections for real-time communication, making it suitable for chat apps, live updates, and more.
+myproject/           # Root directory of your Django project
+├── myproject/       # Project-specific settings and configurations
+│   ├── __init__.py
+│   ├── asgi.py      # ASGI configuration file
+│   ├── settings.py  # Main settings file
+│   ├── urls.py      # Project-wide URL configurations
+│   └── wsgi.py      # WSGI configuration file (for traditional HTTP)
+├── myapp/           # Your Django app where you handle your main logic
+│   ├── __init__.py
+│   ├── consumers.py # WebSocket consumers (similar to views but for WebSockets)
+│   ├── models.py    # Data models
+│   ├── routing.py   # Routing configuration specific to WebSocket URLs
+│   ├── urls.py      # URL routing for HTTP views (optional)
+│   ├── views.py     # Regular HTTP views
+│   └── ...
+├── manage.py        # Command-line utility for administrative tasks
+└── ...
