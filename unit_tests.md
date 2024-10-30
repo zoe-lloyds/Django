@@ -75,36 +75,56 @@ To test this view, we can check:
 
 Here’s a sample unit test:
 
+''' 
 from django.test import TestCase, RequestFactory
 from django.urls import reverse
 from .views import InputView
 from .forms import DataInputForm
+from UserFolder.models import UserChunkedUpload
 
-class InputViewTest(TestCase):
+ class InputViewTest(TestCase):
     def setUp(self):
-        # Set up any initial test data or configuration here
         self.factory = RequestFactory()
         self.url = reverse("Analytics:Reconciler:sheet_selection")
 
     def test_form_renders_correct_template(self):
-        response = self.client.get(reverse("input"))  # Assuming 'input' is the name for InputView in urls
+        # Test that the correct template is used
+        response = self.client.get(reverse("input"))  # Assuming "input" is the name for InputView in urls
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "Reconciler/input.html")
 
     def test_form_submission_success(self):
-        # Mock form data
+        # Set up mock data in the database
+        user_chunked_upload = UserChunkedUpload.objects.create(...)  # Add necessary fields
+
+        # Mock form data for submission
         form_data = {
-            "files_and_folders": ["file1.txt", "file2.txt"],  # Adjust this as needed for your form fields
+            "files_and_folders": [user_chunked_upload.pk],  # Adjust based on form requirements
         }
         response = self.client.post(reverse("input"), data=form_data)
 
-        # Check for redirection to success_url
+        # Check redirection to success_url
         self.assertRedirects(response, self.url)
 
-        # Check session data
+        # Check that session data is set correctly
         session_data = self.client.session.get("reconciler_input_selected_files")
         self.assertIsNotNone(session_data)  # Confirm data is saved
-        # Optionally check the content if you know the expected structure
+        # Optionally verify the content of session_data based on serialization output
+
+    def test_get_form_kwargs_includes_request(self):
+        # Simulate a request to check if 'request' is included in form kwargs
+        request = self.factory.get(reverse("input"))
+        view = InputView()
+        view.request = request
+        form_kwargs = view.get_form_kwargs()
+        self.assertIn("request", form_kwargs)
+
+    def test_get_initial_sets_application_name(self):
+        # Check that 'application_name' is set to 'reconciler'
+        view = InputView()
+        initial_data = view.get_initial()
+        self.assertEqual(initial_data.get("application_name"), "reconciler")
+'''
 
 Explanation of the Test
 
