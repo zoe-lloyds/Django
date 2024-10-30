@@ -129,3 +129,110 @@ Explanation of the Test
 * It checks that the response redirects to success_url, confirming successful form handling.
 * Finally, it verifies that the session stores the reconciler_input_selected_files data, as expected.
 
+# sheet selection
+Certainly! Here’s a unit test for the SheetSelection view. This test will check:
+
+	1.	If the form renders with the correct template and initial data.
+	2.	If a successful form submission saves the selected sheets to the session and redirects to success_url.
+
+To run this test, ensure that SheetSelectionFormSet and the session data (reconciler_input_selected_files) are correctly configured in your environment.
+
+Unit Test for SheetSelection
+
+from django.test import TestCase, RequestFactory
+from django.urls import reverse
+from django.contrib.auth.models import User
+from .views import SheetSelection
+from .forms import SheetSelectionFormSet
+
+class SheetSelectionViewTest(TestCase):
+    def setUp(self):
+        # Set up a test user and login
+        self.user = User.objects.create_user(username="testuser", password="12345")
+        self.client.login(username="testuser", password="12345")
+        
+        # Define the URL for the view
+        self.url = reverse("Analytics:Reconciler:sheet_selection")
+
+        # Set up session data for input files (mock data)
+        session = self.client.session
+        session["reconciler_input_selected_files"] = [
+            {"id": 1, "filename": "test_file.xlsx"},
+            {"id": 2, "filename": "test_file_2.xlsx"}
+        ]
+        session.save()
+
+    def test_form_renders_correct_template_and_initial_data(self):
+        # Test if the view renders with the correct template and initial form data
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "Reconciler/sheet_selection.html")
+        
+        # Verify initial data in the form
+        formset = response.context["formset"]
+        initial_data = [{"file_id": 1, "file_name": "test_file.xlsx"},
+                        {"file_id": 2, "file_name": "test_file_2.xlsx"}]
+        for form, expected in zip(formset.forms, initial_data):
+            self.assertEqual(form.initial, expected)
+
+    def test_form_submission_success(self):
+        # Mock form data with selected sheets for each file
+        form_data = {
+            "form-0-file_id": 1,
+            "form-0-file_name": "test_file.xlsx",
+            "form-0-sheet": "Sheet1",
+            "form-1-file_id": 2,
+            "form-1-file_name": "test_file_2.xlsx",
+            "form-1-sheet": "Sheet2",
+            "form-TOTAL_FORMS": "2",
+            "form-INITIAL_FORMS": "2",
+        }
+        
+        response = self.client.post(self.url, data=form_data)
+        
+        # Check that the response redirects to success_url
+        success_url = reverse("Analytics:Reconciler:config")
+        self.assertRedirects(response, success_url)
+
+        # Verify session data is set correctly
+        session_sheets = self.client.session["reconciler_sheets"]
+        self.assertEqual(session_sheets, ["Sheet1", "Sheet2"])
+
+    def test_form_invalid_submission(self):
+        # Test submitting without selecting a sheet
+        form_data = {
+            "form-0-file_id": 1,
+            "form-0-file_name": "test_file.xlsx",
+            "form-0-sheet": "",  # No sheet selected
+            "form-1-file_id": 2,
+            "form-1-file_name": "test_file_2.xlsx",
+            "form-1-sheet": "",  # No sheet selected
+            "form-TOTAL_FORMS": "2",
+            "form-INITIAL_FORMS": "2",
+        }
+        
+        response = self.client.post(self.url, data=form_data)
+
+        # Check the form errors and that it renders the same page
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "Reconciler/sheet_selection.html")
+        self.assertFormError(response, "formset", "sheet", "This field is required.")
+
+Explanation of the Tests
+
+	1.	test_form_renders_correct_template_and_initial_data:
+	•	Sends a GET request to SheetSelection and checks that:
+	•	The correct template (Reconciler/sheet_selection.html) is used.
+	•	Initial data (from the session) is correctly passed to the form.
+	2.	test_form_submission_success:
+	•	Sends a POST request with mock form data, including selected sheets.
+	•	Checks that:
+	•	The response redirects to success_url.
+	•	The session stores the selected sheets under reconciler_sheets.
+	3.	test_form_invalid_submission:
+	•	Simulates an invalid submission (no sheets selected).
+	•	Ensures that:
+	•	The page is rendered again with errors.
+	•	The correct template is used, and the formset shows a required error for sheet.
+
+This set of tests verifies that the view behaves as expected, handling valid and invalid form submissions and interacting with session data correctly.
