@@ -67,7 +67,7 @@ class SheetSelection(FormView):
 
     def get_initial(self):
         input_files = self.request.session["reconciler_input_selected_files"]
-        initial = [
+        initial = [+
             {"file_id": file["id"], "file_name": file["filename"]}
             for file in input_files
         ]
