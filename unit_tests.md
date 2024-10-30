@@ -67,12 +67,7 @@ To test this view, we can check:
 
 Here’s a sample unit test:
 
-<<<<<<< HEAD
-
 ```
-=======
-''' 
->>>>>>> 1ef58fc37aa2157dcc1e63475f26b92c9fbcd0b8
 from django.test import TestCase, RequestFactory
 from django.urls import reverse
 from .views import InputView
@@ -121,8 +116,6 @@ from UserFolder.models import UserChunkedUpload
         view = InputView()
         initial_data = view.get_initial()
         self.assertEqual(initial_data.get("application_name"), "reconciler")
-'''
-
 ```
 
 Explanation of the Test

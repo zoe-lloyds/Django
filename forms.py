@@ -156,3 +156,175 @@ class FileFieldSelectionForm(forms.Form):
         help_text="Select which fields you wish to retain in the output of the reconciliation. "
         "This should include the field to reconcile the files on.",
     )
+
+
+
+class FileSelectForm(forms.Form):
+    def __init__(self, *args, **kwargs):
+        super(FileSelectForm, self).__init__(*args, **kwargs)
+        self.helper = FormHelper()
+        self.helper.form_id = "id-FileSelectForm"
+        self.helper.form_method = "post"
+        self.helper.form_action = ""
+        self.fields[
+            "file"
+        ].help_text = "You can select multiple files at once. Max file size: 4.2GB"
+
+        self.helper.layout = Layout(
+            Field("file", id="id_file", css_class="btn btn-outline-secondary"),
+            ButtonHolder(Submit("submit", "Upload Files")),
+        )
+
+    # TODO: was this commented line. Check if file input is still being cleared
+    # file = forms.FileField(widget=forms.ClearableFileInput(attrs={"multiple": True}))
+    file = forms.FileField()
+
+
+class FileOnlyModelMultipleChoiceField(forms.ModelMultipleChoiceField):
+    default_error_messages = {
+        "required": "No files selected. Select which files to use using the checkbox."
+    }
+
+    def clean(self, value: Any) -> Any:
+        """
+        Given a list of possible PK values, only pass through the files and drop the folders.
+        Raise a ValidationError if the model queryset is not an MPTTModel
+        """
+        if not issubclass(self.queryset.model, UserChunkedUpload):
+            raise forms.ValidationError(
+                "Field expects a UserChunkedUpload model to distinguish between files and folders."
+            )
+
+        key = self.to_field_name or "pk"
+        try:
+            value = frozenset(value)
+        except TypeError:
+            # list of lists isn't hashable, for example
+            raise forms.ValidationError(
+                self.error_messages["list"],
+                code="list",
+            )
+        # Filter available queryset to given choices from field
+        qs = self.queryset.filter(**{"%s__in" % key: value})
+        file_instances = list(qs.filter(file_or_folder=1).values_list("id", flat=True))
+        return super().clean(file_instances)
+
+
+application_choices = [
+    ("ada", "ada"),
+    ("textcomparison", "textcomparison"),
+    ("stratified", "stratified"),
+    ("reconciler", "reconciler"),
+    ("outlier", "outlier"),
+]
+
+
+class DataInputForm(forms.Form):
+    def __init__(self, *args, **kwargs) -> None:
+        self.request = kwargs.pop("request")
+        super().__init__(*args, **kwargs)
+        self.fields["files_and_folders"].queryset = UserChunkedUpload.objects.filter(
+            user_id=self.request.user.id
+        ).filter(status=2)
+
+    def clean(self):
+        super().clean()
+        application_name = self.cleaned_data.get("application_name")
+        files_and_folders = self.cleaned_data.get("files_and_folders")
+
+        if not files_and_folders:
+            raise forms.ValidationError("Input error")
+
+        max_file_choices = {
+            "ada": 300,
+            "textcomparison": 300,
+            "stratified": 1,
+            "reconciler": 2,
+            "outlier": 1,
+        }
+
+        min_file_choices = {
+            "ada": 1,
+            "textcomparison": 2,
+            "stratified": 1,
+            "reconciler": 2,
+            "outlier": 1,
+        }
+
+        valid_file_types_choices = {
+            "ada": [
+                ".pdf",
+                ".docx",
+                ".doc",
+                ".pptx",
+                "ppt",
+                ".csv",
+                ".txt",
+                ".del",
+                ".tsv",
+                ".xlsx",
+                ".xls",
+                ".xlsm",
+                ".xlsb",
+            ],
+            "textcomparison": [
+                ".csv",
+                ".txt",
+                ".del",
+                ".tsv",
+                ".xlsx",
+                ".xls",
+                ".xlsm",
+                ".xlsb",
+            ],
+            "stratified": [".csv", ".tsv", ".txt", ".xlsx"],
+            "reconciler": [".csv", ".tsv", ".txt", ".xlsx"],
+            "outlier": [".csv", ".txt", ".xlsx"],
+        }
+
+        max_files = max_file_choices[application_name]
+        min_files = min_file_choices[application_name]
+        valid_file_types = valid_file_types_choices[application_name]
+
+        if len(files_and_folders) > max_files:
+            msg = forms.ValidationError(
+                "Too many files selected. Maximum number of files is %(max_files)s.",
+                code="invalid",
+                params={"max_files": max_files},
+            )
+            self.add_error("files_and_folders", msg)
+
+        if len(files_and_folders) < min_files:
+            msg = forms.ValidationError(
+                "Not enough files selected. Minimum number of files is %(min_files)s.",
+                code="invalid",
+                params={"min_files": min_files},
+            )
+            self.add_error("files_and_folders", msg)
+
+        if not set(files_and_folders.values_list("file_extension", flat=True)).issubset(
+            valid_file_types
+        ):
+            msg = forms.ValidationError(
+                "File type not supported. This application can only use files of the following types: %(valid_file_types)s.",
+                code="invalid",
+                params={"valid_file_types": ", ".join(valid_file_types)},
+            )
+            self.add_error("files_and_folders", msg)
+
+        if application_name in ["stratified", "reconciler", "outlier"]:
+            for f in files_and_folders:
+                if f.offset > 250000000:
+                    msg = forms.ValidationError(
+                        "File is too large. This application is currently limited to 250MB per file."
+                    )
+                    self.add_error("files_and_folders", msg)
+                    break
+
+    files_and_folders = FileOnlyModelMultipleChoiceField(
+        queryset=None,
+        required=True,
+    )
+    application_name = forms.ChoiceField(
+        choices=application_choices, widget=forms.HiddenInput()
+    )
