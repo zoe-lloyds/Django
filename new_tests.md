@@ -169,3 +169,75 @@ These tests simulate each step:
 	•	ResultsView: Ensures context data like feedback and dashboard output displays correctly.
 
 This setup should help you confirm each view’s expected behavior. Let me know if you need further adjustments or explanations on specific parts!
+
+# input view
+Here’s a unit test setup for the InputView class. This will cover checking the initial form setup, context, and session updates after form submission.
+
+from django.test import TestCase, Client
+from django.urls import reverse
+from UserFolder.models import UserChunkedUpload
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
+class InputViewTest(TestCase):
+    def setUp(self):
+        # Set up a client and a test user
+        self.client = Client()
+        self.user = User.objects.create_user(username="testuser", password="password")
+        self.client.login(username="testuser", password="password")
+
+        # Create some test files for the user
+        self.file1 = UserChunkedUpload.objects.create(user=self.user, status=2, filename="File1.csv")
+        self.file2 = UserChunkedUpload.objects.create(user=self.user, status=2, filename="File2.csv")
+
+        # URL for InputView
+        self.url = reverse("Analytics:Reconciler:input")
+
+    def test_get_initial_data_in_context(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "Reconciler/input.html")
+
+        # Check if "application_name" is set in the initial context
+        self.assertIn("application_name", response.context["form"].initial)
+        self.assertEqual(response.context["form"].initial["application_name"], "reconciler")
+
+    def test_form_file_queryset_filtering(self):
+        response = self.client.get(self.url)
+        # Check that only files with the correct status for this user are in the queryset
+        form_files = response.context["form"].fields["files_and_folders"].queryset
+        self.assertQuerysetEqual(form_files, UserChunkedUpload.objects.filter(user=self.user, status=2))
+
+    def test_form_submission_saves_files_in_session(self):
+        # Simulate form submission with files and folders selected
+        form_data = {
+            "files_and_folders": [self.file1.id, self.file2.id],
+            "application_name": "reconciler",
+        }
+
+        response = self.client.post(self.url, form_data)
+        
+        # Check that the selected files are saved in the session
+        session_files = self.client.session["reconciler_input_selected_files"]
+        expected_data = [
+            {"id": self.file1.id, "filename": "File1.csv"},
+            {"id": self.file2.id, "filename": "File2.csv"},
+        ]
+        self.assertEqual(session_files, expected_data)
+        
+        # Confirm the redirect after successful form submission
+        self.assertRedirects(response, reverse("Analytics:Reconciler:sheet_selection"))
+
+Explanation of Each Test
+
+	1.	test_get_initial_data_in_context:
+	•	Ensures the InputView loads the correct template and that the initial form context has "application_name" set to "reconciler".
+	2.	test_form_file_queryset_filtering:
+	•	Verifies that the files_and_folders field in the form filters to only include files uploaded by the current user with status=2.
+	3.	test_form_submission_saves_files_in_session:
+	•	Simulates a form submission where the user selects specific files.
+	•	Checks if the selected files are correctly serialized and saved in the session under "reconciler_input_selected_files".
+	•	Confirms that after submission, the user is redirected to the sheet_selection page.
+
+This setup covers the key functionality of the InputView and should provide a solid test foundation for your form’s handling, context, and session interactions. Let me know if you need more details on any part!
