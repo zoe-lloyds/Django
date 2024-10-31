@@ -1,5 +1,6 @@
 Here’s a comprehensive set of unit tests for the InputView class in Django, covering URL resolution, request handling, and proper functioning of the serializer. These tests ensure that the view behaves as expected in terms of URL routing, request processing, and session storage.
 
+```
 from django.test import TestCase, Client
 from django.urls import reverse, resolve
 from UserFolder.models import UserChunkedUpload, UserChunkedUploadSerialiser
@@ -120,6 +121,7 @@ class InputViewTest(TestCase):
         login_url = settings.LOGIN_URL + "?next=" + self.url
         self.assertRedirects(response, login_url)
 
+```
 Explanation of Each Test
 
 	1.	test_input_url_resolves:
