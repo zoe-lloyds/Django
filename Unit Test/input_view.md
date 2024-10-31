@@ -136,3 +136,63 @@ Explanation of Each Test
 	•	Directly tests the UserChunkedUploadSerialiser to ensure it correctly serializes file data, confirming that the serialized output matches the expected format.
 	6.	test_invalid_file_selection_returns_error:
 	•	Simulates a form submission without any file selection to check
+
+
+## new
+
+from django.test import TestCase, Client, RequestFactory
+from django.urls import reverse
+from django.contrib.auth.models import User
+from django.contrib.sessions.middleware import SessionMiddleware
+from UserFolder.models import UserChunkedUpload
+
+class InputViewTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.url = reverse("Analytics:Reconciler:input")
+
+        # Create a test user and log them in
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.client.login(username="testuser", password="testpass")
+
+        # Create some UserChunkedUpload objects to simulate uploaded files for this user
+        self.file1 = UserChunkedUpload.objects.create(
+            user_id=self.user.id, status=2, filename="file1.csv"
+        )
+        self.file2 = UserChunkedUpload.objects.create(
+            user_id=self.user.id, status=2, filename="file2.csv"
+        )
+
+    def test_post_request_saves_files_to_session(self):
+        # Prepare the request factory to simulate a POST request
+        factory = RequestFactory()
+        request = factory.post(self.url, {
+            "files_and_folders": [self.file1.id, self.file2.id],
+            "application_name": "reconciler",
+        })
+        request.user = self.user
+
+        # Manually add session middleware to initialize session data
+        middleware = SessionMiddleware()
+        middleware.process_request(request)
+        request.session.save()
+
+        # Use the view directly to test session behavior
+        from Reconciler.views import InputView
+        response = InputView.as_view()(request)
+
+        # Reload the session from the client to check if data was saved correctly
+        session = request.session
+        self.assertIn("reconciler_input_selected_files", session)
+
+        # Check serialized data in session
+        selected_files = session["reconciler_input_selected_files"]
+        expected_files = [
+            {"id": self.file1.id, "filename": "file1.csv"},
+            {"id": self.file2.id, "filename": "file2.csv"},
+        ]
+        self.assertEqual(selected_files, expected_files)
+
+        # Check redirection after form submission
+        self.assertEqual(response.status_code, 302)  # Redirection status
+        self.assertEqual(response.url, reverse("Analytics:Reconciler:sheet_selection"))
