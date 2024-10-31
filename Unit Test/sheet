@@ -1,0 +1,99 @@
+from django.test import TestCase, Client, RequestFactory
+from django.urls import reverse
+from django.contrib.auth.models import User
+from django.contrib.sessions.middleware import SessionMiddleware
+from Reconciler.views import SheetSelection
+from UserFolder.forms import SheetSelectionFormSet
+
+class SheetSelectionTest(TestCase):
+    def setUp(self):
+        # Set up client, request factory, and test user
+        self.client = Client()
+        self.factory = RequestFactory()
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.client.login(username="testuser", password="testpass")
+        
+        # URL for the SheetSelection view
+        self.url = reverse("Analytics:Reconciler:sheet_selection")
+
+        # Simulate session data for selected files
+        self.session_data = {
+            "reconciler_input_selected_files": [
+                {"id": 1, "filename": "SalesData.xlsx"},
+                {"id": 2, "filename": "InventoryReport.xlsx"},
+            ]
+        }
+
+    def add_session_to_request(self, request):
+        # Attach session to request for testing
+        middleware = SessionMiddleware()
+        middleware.process_request(request)
+        request.session.update(self.session_data)
+        request.session.save()
+
+    def test_get_initial_data_in_context(self):
+        # Create a request for the SheetSelection view
+        request = self.factory.get(self.url)
+        request.user = self.user
+        self.add_session_to_request(request)
+
+        # Initialize the view with the request and verify initial data setup
+        view = SheetSelection()
+        view.request = request
+        initial_data = view.get_initial()
+        
+        expected_data = [
+            {"file_id": 1, "file_name": "SalesData.xlsx"},
+            {"file_id": 2, "file_name": "InventoryReport.xlsx"},
+        ]
+        self.assertEqual(initial_data, expected_data)
+
+    def test_get_request_renders_correct_template(self):
+        # Simulate a GET request to the SheetSelection view
+        response = self.client.get(self.url)
+        
+        # Check response status and template
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "Reconciler/sheet_selection.html")
+
+    def test_form_in_context_on_get_request(self):
+        # Simulate a GET request to ensure the formset is in context
+        request = self.factory.get(self.url)
+        request.user = self.user
+        self.add_session_to_request(request)
+
+        # Create an instance of the view and get context data
+        view = SheetSelection()
+        view.request = request
+        context = view.get_context_data()
+        
+        # Check if formset is in context
+        self.assertIn("formset", context)
+        self.assertIsInstance(context["formset"], SheetSelectionFormSet)
+
+    def test_form_valid_saves_sheets_in_session(self):
+        # Prepare POST data with selected sheets for each file
+        form_data = {
+            "form-0-file_id": 1,
+            "form-0-file_name": "SalesData.xlsx",
+            "form-0-sheet": "Sheet1",
+            "form-1-file_id": 2,
+            "form-1-file_name": "InventoryReport.xlsx",
+            "form-1-sheet": "Summary",
+        }
+        
+        # Simulate POST request
+        request = self.factory.post(self.url, form_data)
+        request.user = self.user
+        self.add_session_to_request(request)
+
+        # Create a view instance, set request, and form instance
+        view = SheetSelection()
+        view.request = request
+        formset = SheetSelectionFormSet(data=form_data, form_kwargs={"request": request})
+
+        # Ensure form is valid
+        self.assertTrue(formset.is_valid(), "Form validation failed due to: " + str(formset.errors))
+
+        # Call form_valid and verify session data
+        response = view.form_valid
