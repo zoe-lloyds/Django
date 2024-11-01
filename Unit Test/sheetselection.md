@@ -1,4 +1,5 @@
 ##
+
 class SheetSelectionTest(TestCase):
     databases = {"default", "application-db"}
 
@@ -233,3 +234,125 @@ class SheetSelectionViewTests(TestCase):
    - Verifies redirection to `success_url` and confirms that selected sheets are saved to the session.
 
 Each test case uses the `RequestFactory` for simulating requests and `SessionMiddleware` to enable session handling in the request. The `patch` decorator is used to mock the `UserChunkedUpload` model, ensuring these tests remain isolated from the database.
+
+##
+from django.test import TestCase, RequestFactory
+from django.urls import reverse
+from django.contrib.sessions.middleware import SessionMiddleware
+from django.contrib.auth import get_user_model
+from .views import SheetSelection
+from .forms import SheetSelectionFormSet
+from myapp.models import UserChunkedUpload  # Adjust the import based on your app structure
+
+class SheetSelectionViewTests(TestCase):
+    """
+    Unit tests for the SheetSelection view to verify initial data setup,
+    form behavior based on file type, and session updates upon form submission.
+    """
+
+    def setUp(self):
+        """Set up the test environment by initializing the request factory, URL, and required database objects."""
+        self.factory = RequestFactory()
+        self.url = reverse("Analytics:Reconciler:sheet_selection")
+
+        # Create a test user and log them in if needed
+        self.user = get_user_model().objects.create_user(username="testuser", password="password")
+        
+        # Create a real UserChunkedUpload instance for testing
+        self.test_file = UserChunkedUpload.objects.create(
+            id=1,
+            user=self.user,
+            file_extension=".xls",
+            ingestion_metadata={"column_headers": {"Sheet1": [], "Sheet2": []}}
+        )
+
+    def _setup_request(self, method='get', data=None):
+        """
+        Helper method to initialize a request with session support and logged-in user.
+        """
+        request = getattr(self.factory, method)(self.url, data=data)
+        request.user = self.user  # Set the user on the request
+        # Manually add session support
+        middleware = SessionMiddleware()
+        middleware.process_request(request)
+        request.session.save()
+        return request
+
+    def test_get_initial_with_excel_file(self):
+        """
+        Test that the initial form data includes sheet choices when an Excel file is selected.
+
+        Verifies that the formset is populated with the correct sheet choices based on the file metadata.
+        """
+        # Mock session data for an Excel file
+        request = self._setup_request()
+        request.session["reconciler_input_selected_files"] = [{"id": self.test_file.id, "filename": "test_file.xls"}]
+        request.session.save()
+
+        # Instantiate the view and call the GET method
+        view = SheetSelection.as_view()
+        response = view(request)
+
+        # Check the response status and formset content
+        self.assertEqual(response.status_code, 200)
+        formset = response.context_data["formset"]
+        self.assertEqual(len(formset.forms), 1)
+        self.assertIn("Sheet1", dict(formset.forms[0].fields["sheet"].choices))
+        self.assertIn("Sheet2", dict(formset.forms[0].fields["sheet"].choices))
+
+    def test_get_initial_with_non_excel_file(self):
+        """
+        Test that the form contains a single 'NA' choice for non-Excel files.
+
+        Verifies that 'NA' is the only option for sheet selection when the file is not an Excel type.
+        """
+        # Mock session data for a non-Excel file
+        request = self._setup_request()
+        request.session["reconciler_input_selected_files"] = [{"id": self.test_file.id, "filename": "test_file.csv"}]
+        self.test_file.file_extension = ".csv"  # Change file extension to a non-Excel type
+        self.test_file.save()
+        request.session.save()
+
+        # Instantiate the view and call the GET method
+        view = SheetSelection.as_view()
+        response = view(request)
+
+        # Check the response status and formset content
+        self.assertEqual(response.status_code, 200)
+        formset = response.context_data["formset"]
+        self.assertEqual(formset.forms[0].fields["sheet"].choices, [("NA", "NA")])
+
+    def test_form_valid_saves_to_session(self):
+        """
+        Test form submission and session update upon successful form validation.
+
+        Verifies that selected sheets are saved to the session after a valid form submission,
+        and checks redirection to the configured success URL.
+        """
+        # Set up request with session data and a valid post payload
+        request = self._setup_request(method='post', data={
+            "form-0-sheet": "Sheet1",
+            "form-0-file_id": self.test_file.id,  # Match file_id with the actual object
+            "form-0-file_name": "test_file.xls",
+            "form-TOTAL_FORMS": "1",
+            "form-INITIAL_FORMS": "0",
+        })
+        request.session["reconciler_input_selected_files"] = [{"id": self.test_file.id, "filename": "test_file.xls"}]
+        request.session.save()
+
+        # Test form_valid functionality by invoking the POST method
+        view = SheetSelection.as_view()
+        response = view(request)
+
+        # Check if response is a redirect or not
+        if hasattr(response, "url"):
+            # Verify redirection and session update
+            self.assertEqual(response.status_code, 302)
+            self.assertEqual(response.url, reverse("Analytics:Reconciler:config"))
+            self.assertIn("reconciler_sheets", request.session)
+            self.assertEqual(request.session["reconciler_sheets"], ["Sheet1"])
+        else:
+            # Print form errors if response is a TemplateResponse
+            print("Form errors:", response.context_data["form"].errors)
+            self.fail("Expected a redirect response but got a TemplateResponse. Check form validation.")
+
