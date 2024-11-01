@@ -1,3 +1,7 @@
+
+formset = SheetSelectionFormSet(data=request.POST, form_kwargs={'request': request})
+print("Available file_id choices:", formset.forms[0].fields["file_id"].queryset)  # Debug output
+
 ##
 
 class SheetSelectionTest(TestCase):
