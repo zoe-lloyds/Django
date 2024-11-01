@@ -78,3 +78,33 @@ class SheetSelectionTest(TestCase):
         response = view.form_valid(form)
         self.assertEqual(self.request.session["reconciler_sheets"], ["Sheet1"])
         self.assertEqual(response.url, self.success_url)
+
+
+        class SheetSelectionForm(forms.Form):
+    def __init__(self, *args, **kwargs) -> None:
+        self.request = kwargs.pop("request")
+        super().__init__(*args, **kwargs)
+
+        file_qs = UserChunkedUpload.objects.get(pk=self.initial["file_id"])
+        ext = file_qs.file_extension
+        self.fields["file_id"].queryset = UserChunkedUpload.objects.filter(
+            user_id=self.request.user.id
+        ).filter(status=2)
+        if ext[:4] == ".xls":
+            sheets = file_qs.ingestion_metadata["column_headers"].keys()
+            choices = [(sheet, sheet) for sheet in sheets]
+            self.fields["sheet"] = forms.ChoiceField(choices=choices, required=False)
+            self.fields["file_type"].initial = "excel"
+        else:
+            self.fields["sheet"] = forms.ChoiceField(
+                choices=[("NA", "NA")], required=False
+            )
+
+    file_type = forms.CharField(widget=forms.HiddenInput(), initial="unkn")
+    file_name = forms.CharField(widget=forms.HiddenInput())
+    file_id = forms.ModelChoiceField(widget=forms.HiddenInput(), queryset=None)
+
+
+SheetSelectionFormSet = formset_factory(
+    SheetSelectionForm, formset=BaseFormSet, extra=0
+)
